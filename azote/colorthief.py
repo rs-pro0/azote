@@ -14,6 +14,22 @@ import math
 
 from PIL import Image
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    print('Warning: HEIF/HEIC image support not available. Install pillow-heif.')
+
+try:
+    import pillow_avif
+except ImportError:
+    print('Warning: AVIF image support not available. Install pillow-avif.')
+
+try:
+    import pillow_jxl
+except ImportError:
+    print('JPEG XL (JXL) support not available. Install pillow-jxl if needed.')
+
 
 class cached_property(object):
     """Decorator that creates converts a method with a single

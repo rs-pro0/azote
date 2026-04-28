@@ -1,8 +1,7 @@
-# Azote
+<img src="https://github.com/nwg-piotr/azote/assets/20579136/6ee4b9aa-e73d-4c9f-9665-a86bd76c045b" width="90" style="margin-right:10px" align=left alt="nwg-shell logo">
+<H1>Azote</H1><br>
 
 This application is a part of the [nwg-shell](https://nwg-piotr.github.io/nwg-shell) project.
-
-**Contributing:** please read the [general contributing rules for the nwg-shell project](https://nwg-piotr.github.io/nwg-shell/contribution).
 
 **Azote** is a GTK+3 - based picture browser and background setter, as the frontend to the [swaybg](https://github.com/swaywm/swaybg) 
 (sway/Wayland) and [feh](https://feh.finalrewind.org) (X windows) commands. The user interface is being developed with
@@ -17,7 +16,7 @@ Azote relies on numerous external packages. Some of them determine if the progra
 environment (sway / another wlroots-based compositor / X11). It's **up to the packager** which of them come preinstalled.
 It's recommendable to first run `azote` from terminal:
 
-- if one of missing packages disallows Azote to work at all (e.g. `xorg-xrandr` or `feh` on X11, `wlr-randr` or 
+- if one of missing packages disallows Azote to work at all (e.g. `python-xlib` or `feh` on X11, `wlr-randr` or 
 `swaybg` on Wayfire), the program will display a message and terminate with exit code 1.
 
 - If a missing dependency just stops some feature from working, Azote will display a message and start normally.
@@ -29,12 +28,12 @@ Running on Wayland, but not sway
 Available screen height: 1030 px; measurement delay: 5 ms
 ```
 
-![2022-05-29-125823_screenshot](https://user-images.githubusercontent.com/20579136/170864580-840e1c27-702d-40f4-a98c-a460826b805c.png)
+<img src="https://user-images.githubusercontent.com/20579136/170864580-840e1c27-702d-40f4-a98c-a460826b805c.png" width=640 alt="screenshot"><br>
 
 ## Project assumptions
 
 The most commonly used *desktop background browser and setter* is aimed at X windows, and does not work with 
-wlroots-based composers. Since the `swaybg` command does everything we may need, it's enough to give it a GUI. 
+wlroots-based compositors. Since the `swaybg` command does everything we may need, it's enough to give it a GUI. 
 In order not to limit the program usage to the single environment, Azote is also capable of using feh 
 when running on i3, Openbox or other X11 window managers.
 
@@ -98,9 +97,9 @@ In `~/.config/wayfire.ini` set `autostart_wf_shell = false`, and replace `backgr
 ### X window managers (i3, Openbox, dwm etc.)
 
 You need to execute `~/.fehbg` from your window manager’s startup file.
-You'll also need optional `feh` and `xorg-xrandr` packages.
+You'll also need optional `feh` and `python-xlib` (or `python3-xlib`, depending on the distro) packages.
 
-**Important:** optional `xorg-xrandr` and `feh` packages are necessary.
+**Important:** optional `python-xlib` and `feh` packages are necessary.
 
 **dwm note:**
 
@@ -119,7 +118,7 @@ done &
 exec dwm
 ```
 
-### Dependencies (as used in the `azote` AUR package):
+### Dependencies (as used in the `azote` Arch package):
 
 - `python` (`python3`)
 - `python-setuptools`
@@ -131,6 +130,9 @@ exec dwm
 
 ### Optional dependencies:
 
+- `python-pillow-jxl-plugin` | `python-pillow-jpegxl-plugin`: for JPEG XL support in Pillow
+- `python-pillow-heif`: for HEIF support in Pillow
+- `python-pillow-avif-plugin`: for AVIF support in Pillow, also needed for HEIF support
 - `imagemagick`: for screen color picker in every environment
 - `grim`, `slurp`: for screen color picker on sway / wlroots
 - `maim`, `slop`: for screen color picker on X11
@@ -138,7 +140,7 @@ exec dwm
 - `python-yaml`: for alacritty.yml toolbox
 - `swaybg`: for setting background on wlroots-based compositors other than sway
 - `feh`: for setting background on X11-based WMs
-- `xorg-xrandr`: for checking outputs on X11-based WMs
+- `python-xlib`: for checking outputs on X11-based WMs
 - `wlr-randr` (`wlr-randr-git`): for checking outputs on wlroots-based compositors other than sway
 
 Please use assets from the [latest release](https://github.com/nwg-piotr/azote/releases/latest).
@@ -160,7 +162,7 @@ Seeing Arch [PKGBUILD](https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=az
 }
 ```
 
-Azote is being developed on the 1920 x 1080 box, and some graphics dimensions may not go well with other screens.
+Azote is being developed on the 1920x1080 box, and some graphics dimensions may not go well with other screens.
 The runtime configuration file allows to redefine them:
 
 - `thumb_width` - thumbnail width; changing the value triggers thumbnails regeneration on startup;
@@ -210,8 +212,6 @@ gtk-button-images=1
 
 ### 'Open with...' feature doesn't work
 
-![screenshot](http://nwg.pl/Lychee/uploads/big/4372deec10eb787fbf8f840c2abf3b67.png)
-
 **Azote v1.2.0 and below** - no 'Open with' menu entry at all;
 
 **Azote v1.3.0 and above** - the only program listed is feh.
@@ -239,6 +239,6 @@ see the black screen on sway). On my development machine the minimum value is 30
 
 ## X11 / feh notice
 
-The background color picker won't be available. You'll also be unable to select different modes 
+You'll be unable to select different modes
 *("scale", "max", "fill", "center", "tile")* for certain displays. The list of modes varies from what you see in Sway 
 *("stretch", "fit", "fill", "center", "tile")*.

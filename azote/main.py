@@ -6,7 +6,6 @@ Wallpaper and colour manager for Sway, i3 and some other WMs, as a frontend to s
 
 Author: Piotr Miller & Contributors
 e-mail: nwg.piotr@gmail.com
-Website: http://nwg.pl
 Project: https://github.com/nwg-piotr/azote
 License: GPL3
 
@@ -15,9 +14,28 @@ import os
 import sys
 import subprocess
 import stat
+
 import gi
 import cairo
+
 from PIL import Image
+
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    print('Warning: HEIF/HEIC image support not available. Install pillow-heif.')
+
+try:
+    import pillow_avif
+except ImportError:
+    print('Warning: AVIF image support not available. Install pillow-avif.')
+
+try:
+    import pillow_jxl
+except ImportError:
+    print('JPEG XL (JXL) support not available. Install pillow-jxl if needed.')
+
 from azote import common
 
 # send2trash module may or may not be available
@@ -29,7 +47,9 @@ except Exception:
     common.env['send2trash'] = False
     print('python-send2trash package not found - deleting pictures unavailable')
 
-from colorthief import ColorThief
+from azote.colorthief import ColorThief
+
+dir_name = os.path.dirname(__file__)
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GdkPixbuf, Gdk, GLib
@@ -42,21 +62,32 @@ from azote.plugins import Alacritty, Xresources
 from azote.color_tools import WikiColours
 
 try:
-    gi.require_version('AppIndicator3', '0.1')
-    from gi.repository import AppIndicator3
+    try:
+        gi.require_version('AppIndicator3', '0.1')
+        from gi.repository import AppIndicator3
 
-    common.env['app_indicator'] = True
-except:
+        common.env['app_indicator'] = True
+        common.env['app_indicator_library'] = 'AppIndicator3'
+    except (ImportError, ValueError):
+        gi.require_version('AyatanaAppIndicator3', '0.1')
+        from gi.repository import AyatanaAppIndicator3 as AppIndicator3
+
+        common.env['app_indicator'] = True
+        common.env['app_indicator_library'] = 'AyatanaAppIndicator3'
+except Exception as e:
     common.env['app_indicator'] = False
-    print('libappindicator-gtk3 package not found - tray icon unavailable')
+    common.env['app_indicator_library'] = None
+    print('Neither libappindicator-gtk3 nor libayatana-appindicator3 package found - tray icon unavailable')
 
 from azote.__about__ import __version__
 
+
 def get_files():
     try:
-        inames = "-iname \"*."+"\" -o -iname \"*.".join(common.allowed_file_types)+"\""
-        files = subprocess.check_output("find '%s' -mindepth 1 %s" %(common.settings.src_path, inames), shell=True).decode().split("\n")[:-1]
-        file_names = [f.replace(common.settings.src_path+"/", "") for f in files]
+        inames = "-iname \"*." + "\" -o -iname \"*.".join(common.allowed_file_types) + "\""
+        files = subprocess.check_output("find '%s' -mindepth 1 %s" % (common.settings.src_path, inames),
+                                        shell=True).decode().split("\n")[:-1]
+        file_names = [f.replace(common.settings.src_path + "/", "") for f in files]
     except FileNotFoundError:
         common.settings.src_path = os.getenv('HOME')
         file_names = [f for f in os.listdir(common.settings.src_path)
@@ -212,7 +243,7 @@ class ImageToolbar(Gtk.HBox):
 
         self.menu_btn = Gtk.EventBox()
         img = Gtk.Image()
-        img.set_from_file('images/icon_image_menu.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_image_menu.svg'))
         self.menu_btn.add(img)
         self.menu_btn.connect('button-press-event', self.on_menu_button_press)
         self.pack_start(self.menu_btn, False, False, 0)
@@ -243,7 +274,7 @@ class DisplayBox(Gtk.Box):
         if thumb and os.path.isfile(thumb):
             pixbuf = GdkPixbuf.Pixbuf.new_from_file(thumb)
         else:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file('images/empty.png')
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(dir_name, 'images/empty.png'))
         pixbuf = pixbuf.scale_simple(common.settings.thumb_size[0], common.settings.thumb_size[1], InterpType.BILINEAR)
 
         self.img = Gtk.Image.new_from_pixbuf(pixbuf)
@@ -308,7 +339,7 @@ class DisplayBox(Gtk.Box):
         self.flip_button = Gtk.Button()
         self.flip_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_flip.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_flip.svg'))
         self.flip_button.set_image(img)
         self.flip_button.set_tooltip_text(common.lang['flip_image'])
         self.flip_button.set_sensitive(False)
@@ -360,7 +391,7 @@ class DisplayBox(Gtk.Box):
     def on_color_chosen(self, user_data, button):
         self.color = rgba_to_hex(button.get_rgba())
         # clear selected image to indicate it won't be used
-        self.img.set_from_file("images/empty.png")
+        self.img.set_from_file(os.path.join(dir_name, "images/empty.png"))
         common.apply_button.set_sensitive(True)
 
     def on_flip_button(self, button):
@@ -383,13 +414,13 @@ class SortingButton(Gtk.Button):
 
     def refresh(self):
         if common.settings.sorting == 'old':
-            self.img.set_from_file('images/icon_old.svg')
+            self.img.set_from_file(os.path.join(dir_name, 'images/icon_old.svg'))
         elif common.settings.sorting == 'az':
-            self.img.set_from_file('images/icon_az.svg')
+            self.img.set_from_file(os.path.join(dir_name, 'images/icon_az.svg'))
         elif common.settings.sorting == 'za':
-            self.img.set_from_file('images/icon_za.svg')
+            self.img.set_from_file(os.path.join(dir_name, 'images/icon_za.svg'))
         else:
-            self.img.set_from_file('images/icon_new.svg')
+            self.img.set_from_file(os.path.join(dir_name, 'images/icon_new.svg'))
         self.set_image(self.img)
 
     def on_sorting_button(self, widget):
@@ -464,9 +495,10 @@ def on_apply_button(button):
                     display_name = box.display_name
 
                 # Escape some special characters which would mess up the script
-                wallpaper_path = box.wallpaper_path.replace('\\', '\\\\').replace("$", "\$").replace("`",
-                                                                                                     "\\`").replace('"',
-                                                                                                                    '\\"')
+                wallpaper_path = box.wallpaper_path.replace('\\', '\\\\').replace("$", "\\$").replace("`",
+                                                                                                      "\\`").replace(
+                    '"',
+                    '\\"')
 
                 batch_content.append(
                     "swaybg -o '{}' -i \"{}\" -m {} &".format(display_name, wallpaper_path, box.mode))
@@ -587,7 +619,7 @@ def on_about_button(button):
         print("Couldn't check version: {}".format(e))
         pass
 
-    logo = GdkPixbuf.Pixbuf.new_from_file_at_size('images/azote.svg', 96, 96)
+    logo = GdkPixbuf.Pixbuf.new_from_file_at_size(os.path.join(dir_name, 'images/azote.svg'), 96, 96)
 
     dialog.set_keep_above(True)
     dialog.set_logo(logo)
@@ -608,7 +640,8 @@ def on_about_button(button):
                         '- maim, slop (c) 2014 Dalton Nell and Contributors',
                         '- imagemagick (c) 1999-2019 ImageMagick Studio LLC',
                         '- PyYAML (c) 2017-2019 Ingy döt Net Copyright (c) 2006-2016 Kirill Simonov'])
-    dialog.set_translator_credits('xsme, Leon-Plickat (de_DE), HumanG33k (fr_FR)')
+    dialog.set_translator_credits(
+        'zen0bit (cs_CZ), xsme, Leon-Plickat (de_DE), HumanG33k (fr_FR), Andrea Frati (it_IT),\nMarcelo dos Santos (pt_BR), Aleksey Samoilov (ru_RU), Ufuayk (tr_TR)')
     dialog.set_artists(['edskeye'])
 
     dialog.show()
@@ -630,7 +663,7 @@ def show_image_menu(widget, event=None, parent=None, from_toolbar=False):
     cd = current_display()
     if common.selected_wallpaper:
         if common.associations:  # not None if /usr/share/applications/mimeinfo.cache found and parse
-            openers = common.associations[common.selected_wallpaper.source_path.split('.')[-1]]
+            openers = common.associations[common.selected_wallpaper.source_path.split('.')[-1].lower()]
             menu = Gtk.Menu()
             if openers:
                 for opener in openers:
@@ -916,7 +949,7 @@ class GUI:
         refresh_button = Gtk.Button()
         refresh_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_refresh.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_refresh.svg'))
         refresh_button.set_image(img)
         refresh_button.set_tooltip_text(common.lang['refresh_folder_preview'])
         bottom_box.add(refresh_button)
@@ -941,7 +974,7 @@ class GUI:
             common.split_button = Gtk.Button()
             common.split_button.set_always_show_image(True)
             img = Gtk.Image()
-            img.set_from_file('images/icon_split.svg')
+            img.set_from_file(os.path.join(dir_name, 'images/icon_split.svg'))
             common.split_button.set_image(img)
             bottom_box.add(common.split_button)
             common.split_button.set_sensitive(False)
@@ -952,7 +985,7 @@ class GUI:
         common.apply_to_all_button = Gtk.Button()
         common.apply_to_all_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_all.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_all.svg'))
         common.apply_to_all_button.set_image(img)
         common.apply_to_all_button.connect('clicked', on_apply_to_all_button)
         common.apply_to_all_button.set_sensitive(False)
@@ -967,7 +1000,7 @@ class GUI:
         common.apply_button = Gtk.Button()
         common.apply_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_apply.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_apply.svg'))
         common.apply_button.set_image(img)
         common.apply_button.connect('clicked', on_apply_button)
         common.apply_button.set_sensitive(False)
@@ -989,7 +1022,7 @@ class GUI:
         about_button = Gtk.Button()
         about_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_about.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_about.svg'))
         about_button.set_image(img)
         about_button.set_tooltip_text(common.lang['about_azote'])
         about_button.connect('clicked', on_about_button)
@@ -999,7 +1032,7 @@ class GUI:
         settings_button = Gtk.Button()
         settings_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_menu.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_menu.svg'))
         settings_button.set_image(img)
         settings_button.set_tooltip_text(common.lang['preferences'])
         settings_button.connect('clicked', on_settings_button)
@@ -1009,7 +1042,7 @@ class GUI:
         picker_button = Gtk.Button()
         picker_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_picker.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_picker.svg'))
         picker_button.set_image(img)
         picker_button.set_sensitive(common.picker)
         if common.sway or common.env['wayland']:
@@ -1024,7 +1057,7 @@ class GUI:
         dotfiles_button = Gtk.Button()
         dotfiles_button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_config.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_config.svg'))
         dotfiles_button.set_image(img)
         active = common.xresources or common.alacritty_config and common.env['yaml']
         if active:
@@ -1124,7 +1157,7 @@ def pick_color():
     if common.sway or common.env['wayland']:
         try:
             color = hex_to_rgb(subprocess.check_output(
-                'grim -g "$(slurp -p)" -t ppm - | convert - -format \'%[pixel:p{0,0}]\' txt:- | awk \'NR==2 {print $3}\'',
+                'grim -g "$(slurp -p)" -t ppm - | magick - -format \'%[pixel:p{0,0}]\' txt:- | awk \'NR==2 {print $3}\'',
                 shell=True).decode("utf-8"))
         except:
             try:
@@ -1133,7 +1166,7 @@ def pick_color():
                 pass
     else:
         try:
-            output = subprocess.check_output('maim -st 0 | convert - -resize 1x1! -format \'%[pixel:p{0,0}]\' info:-',
+            output = subprocess.check_output('maim -st 0 | magick - -resize 1x1! -format \'%[pixel:p{0,0}]\' info:-',
                                              shell=True).decode("utf-8")
             values = output[6:-1].split(",")
             color = (int(values[0]), int(values[1]), int(values[2]))
@@ -1515,7 +1548,7 @@ class ColorPickerDialog(Gtk.Window):
         button = Gtk.Button()
         button.set_always_show_image(True)
         img = Gtk.Image()
-        img.set_from_file('images/icon_picker.svg')
+        img.set_from_file(os.path.join(dir_name, 'images/icon_picker.svg'))
         button.set_image(img)
         button.connect_after('clicked', self.pick_new_color)
         hbox.pack_start(button, True, False, 0)

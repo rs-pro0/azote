@@ -14,13 +14,30 @@ import os
 import glob
 import hashlib
 import logging
-from PIL import Image
 import pickle
 import subprocess
 import sys
 import shutil
 
 import json
+
+from PIL import Image
+
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    print('Warning: HEIF/HEIC image support not available. Install pillow-heif.')
+
+try:
+    import pillow_avif
+except ImportError:
+    print('Warning: AVIF image support not available. Install pillow-avif.')
+
+try:
+    import pillow_jxl
+except ImportError:
+    print('JPEG XL (JXL) support not available. Install pillow-jxl if needed.')
 
 import gi
 
@@ -58,7 +75,12 @@ def check_displays():
     # Sway or not Sway?
     common.sway = os.getenv('SWAYSOCK')
     if common.sway:
-        common.env['wm'] = 'sway'
+        if os.getenv('XDG_SESSION_DESKTOP') and "miracle-wm" in os.getenv('XDG_SESSION_DESKTOP'):
+            common.env['wm'] = 'miracle-wm'
+            common.env['swaymsg_cmd'] = 'miraclemsg'
+        else:
+            common.env['wm'] = 'sway'
+            common.env['swaymsg_cmd'] = 'swaymsg'
 
     else:
         if os.getenv('XDG_SESSION_DESKTOP'):
@@ -75,11 +97,14 @@ def check_displays():
         common.env['wayland'] = os.getenv('WAYLAND_DISPLAY')
 
     if common.sway:
-        print("Running on sway")
-        # We need swaymsg to check outputs on Sway
+        if common.env['wm'] == "miracle-wm":
+            print("Running on Miracle WM")
+        else:
+            print("Running on sway")
+        # We need miraclemsg/swaymsg to check outputs on MiracleWM or Sway
         try:
             displays = []
-            json_string = subprocess.check_output("swaymsg -t get_outputs", shell=True).decode("utf-8").strip()
+            json_string = subprocess.check_output(f"{common.env['swaymsg_cmd']} -t get_outputs", shell=True).decode("utf-8").strip()
             outputs = json.loads(json_string)
             for output in outputs:
                 if output['active']:  # dunno WTF xroot-0 is: i3 returns such an output with "active":false
@@ -115,9 +140,14 @@ def check_displays():
 
     elif os.getenv("HYPRLAND_INSTANCE_SIGNATURE"):
         print("Running on Hyprland")
+        # /tmp/hypr moved to $XDG_RUNTIME_DIR/hypr in #5788
+        xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+        hypr_dir = f"{xdg_runtime_dir}/hypr" if xdg_runtime_dir and os.path.isdir(
+            f"{xdg_runtime_dir}/hypr") else "/tmp/hypr"
+
         import socket
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.connect("/tmp/hypr/{}/.socket.sock".format(os.getenv("HYPRLAND_INSTANCE_SIGNATURE")))
+        s.connect("{}/{}/.socket.sock".format(hypr_dir, os.getenv("HYPRLAND_INSTANCE_SIGNATURE")))
 
         s.send("j/monitors".encode("utf-8"))
         output = s.recv(20480).decode('utf-8')
@@ -130,6 +160,8 @@ def check_displays():
                 g_name += " {}".format(c["model"])
             if c["serial"]:
                 g_name += " {}".format(c["serial"])
+            else:
+                g_name += " "
             display = {'name': c['name'],
                        'x': c['x'],
                        'y': c['y'],
@@ -211,11 +243,12 @@ def check_displays():
         else:
             print("Running on X11")
         fnull = open(os.devnull, 'w')
+
         try:
-            common.env['xrandr'] = subprocess.call(["xrandr", "-v"], stdout=fnull, stderr=subprocess.STDOUT) == 0
-        except Exception as e:
-            print("xorg-xrandr package required: {}".format(e))
-            log("xorg-xrandr package not found", common.ERROR)
+            from Xlib import display
+        except ImportError as e:
+            print("python3-xlib package required: {}".format(e))
+            log("python-xlib package not found", common.ERROR)
             exit(1)
 
         try:
@@ -226,30 +259,18 @@ def check_displays():
             exit(1)
 
         try:
-            names = subprocess.check_output("xrandr | awk '/ connected/{print $1}'", shell=True).decode(
-                "utf-8").splitlines()
-            res = subprocess.check_output("xrandr | awk '/[*]/{print $1}'", shell=True).decode("utf-8").splitlines()
-            coords = subprocess.check_output("xrandr --listmonitors | awk '{print $3}'", shell=True).decode(
-                "utf-8").splitlines()
-            displays = []
-            for i in range(len(res)):
-                w_h = res[i].split('x')
-                try:
-                    x_y = coords[i + 1].split('+')
-                except:
-                    x_y = (0, 0, 0)
-                display = {'name': names[i],
-                           'x': x_y[1],
-                           'y': x_y[2],
-                           'width': int(w_h[0]),
-                           'height': int(w_h[1]),
-                           'xrandr-idx': i}
-                displays.append(display)
-                log("Output found: {}".format(display), common.INFO)
-
-            displays = sorted(displays, key=lambda x: (x.get('x'), x.get('y')))
-            return displays
-
+            display = display.Display()
+            root = display.screen().root
+            displays = [
+                {'name': display.get_atom_name(m.name),
+                 'x': m.x,
+                 'y': m.y,
+                 'width': m.width_in_pixels,
+                 'height': m.height_in_pixels,
+                 'xrandr-idx': i}
+                for i, m in enumerate(root.xrandr_get_monitors().monitors)
+            ]
+            return sorted(displays, key=lambda d: (d["x"], d["y"]))
         except Exception as e:
             print("Failed checking displays: {}".format(e), common.ERROR)
             log("Failed checking displays: {}".format(e), common.ERROR)
@@ -259,8 +280,8 @@ def check_displays():
 def current_display():
     display_number = 0
     x, y = 0, 0
-    if common.env['wm'] == "sway":
-        string = subprocess.getoutput("swaymsg -t get_outputs")
+    if common.env['wm'] == "miracle-wm" or common.env['wm'] == "sway":
+        string = subprocess.getoutput(f"{common.env['swaymsg_cmd']} -t get_outputs")
         outputs = json.loads(string)
         for i in range(len(outputs)):
             if outputs[i]["focused"]:
@@ -467,7 +488,7 @@ def set_env(__version__, lang_from_args=None):
 
     # Check if packages necessary to pick colours from the screen available
     try:
-        magick = subprocess.run(['convert', '-version'], stdout=subprocess.DEVNULL).returncode == 0
+        magick = subprocess.run(['magick', '-version'], stdout=subprocess.DEVNULL).returncode == 0
     except FileNotFoundError:
         magick = False
         print('imagemagick package not found - color picked disabled')
@@ -680,7 +701,7 @@ def expand_img(image):
         # border = (border_h, border_v, border_h, border_v)
         # return ImageOps.expand(image, border=border)
         # Let's add checkered background instead of the black one
-        background = Image.open('images/squares.jpg')
+        background = Image.open(os.path.join(dir_name, 'images/squares.jpg'))
         background = background.resize(common.settings.thumb_size, Image.LANCZOS)
         background.paste(image, (border_h, border_v))
         return background
